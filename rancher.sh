@@ -56,7 +56,7 @@ if [ -e /etc/redhat-release ]; then
         yum-config-manager --add-repo -y https://download.docker.com/linux/centos/docker-ce.repo
         yum makecache fast
         echo "最新版をインストールします"
-        yum install docker-ce
+        yum install -y docker-ce
         end_message
 
 
