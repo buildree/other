@@ -53,7 +53,7 @@ if [ -e /etc/redhat-release ]; then
         start_message
         echo "Dockerのインストールをします"
         yum install -y yum-utils device-mapper-persistent-data  lvm2
-        yum-config-manager --add-repo -y https://download.docker.com/linux/centos/docker-ce.repo
+        yum-config-manager --add-repo  https://download.docker.com/linux/centos/docker-ce.repo
         yum makecache fast
         echo "最新版をインストールします"
         yum install -y docker-ce
