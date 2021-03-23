@@ -12,7 +12,7 @@ URL：https://buildree.com/
 目的：システム更新+nginxのインストール
 ・nginx
 ・mod_sslのインストール
-・gogsのインストール
+・Rancherののインストール
 ・centosユーザーの作成
 
 COMMENT
