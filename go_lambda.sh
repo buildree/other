@@ -55,8 +55,6 @@ if [ -e /etc/redhat-release ]; then
         end_message
 
         #Go言語の設定変更
-        start_message
-        echo "Go言語のパスを通します"
         mkdir /usr/local/gocode
         mkdir /usr/local/gocode/{src,bin,pkg}
         touch /etc/profile.d/golang.sh
@@ -66,7 +64,6 @@ if [ -e /etc/redhat-release ]; then
 
         #設定の反映
         source /etc/profile.d/golang.sh
-        end_message
 
 
         #ユーザー作成
@@ -99,6 +96,7 @@ EOF
 
         #サンプルファイル作成
         start_message
+        echo "サンプルファイル作成"
         cat > /home/centos/hello.go <<'EOF'
         package main
 
@@ -122,25 +120,21 @@ EOF
 EOF
         end_message
 
+
         #実行
         start_message
         echo "必要なツールをダウンロード"
         echo "go get -u github.com/aws/aws-lambda-go/lambda"
-        go get -u github.com/aws/aws-lambda-go/lambda
+        su -l centos -c "go get -u github.com/aws/aws-lambda-go/lambda"
 
         echo "バイナリデータ作成"
-        go build -o hello hello.go
+        su -l centos -c "go build -o hello hello.go"
         end_message
-
 
         echo "centosユーザーのパスワードは"${PASSWORD}"です。"
         #所有者変更
-        start_message
         chown -R centos:nobody /home/centos/
         su -l centos
-        end_message
-
-
 
 
 
