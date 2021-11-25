@@ -68,12 +68,6 @@ if [ -e /etc/redhat-release ]; then
         source /etc/profile.d/golang.sh
         end_message
 
-        #Go言語に必要な情報をインストール
-        start_message
-        echo "go get -u github.com/aws/aws-lambda-go/lambda"
-        go get -u github.com/aws/aws-lambda-go/lambda
-        end_message
-
 
         #ユーザー作成
         start_message
@@ -132,10 +126,10 @@ EOF
         start_message
         echo "必要なツールをダウンロード"
         echo "go get -u github.com/aws/aws-lambda-go/lambda"
-        su -l centos -c go get -u github.com/aws/aws-lambda-go/lambda
+        go get -u github.com/aws/aws-lambda-go/lambda
 
         echo "バイナリデータ作成"
-        su -l centos -c go build -o hello hello.go
+        go build -o hello hello.go
         end_message
 
 
