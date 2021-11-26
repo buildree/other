@@ -95,8 +95,8 @@ EOF
 
 
         #サンプルファイル作成
-        start_message
         echo "サンプルファイル作成"
+        start_message
         cat > /home/centos/hello.go <<'EOF'
         package main
 
@@ -122,13 +122,17 @@ EOF
 
 
         #実行
-        start_message
         echo "必要なツールをダウンロード"
+        start_message
         echo "go get -u github.com/aws/aws-lambda-go/lambda"
         su -l centos -c "go get -u github.com/aws/aws-lambda-go/lambda"
 
-        echo "バイナリデータ作成"
+        echo "helloのバイナリデータ作成"
+        echo "go build -o hello hello.go"
         su -l centos -c "go build -o hello hello.go"
+        echo "zip圧縮します"
+        echo "zip -r hello.zip hello"
+        su -l centos -c "zip -r hello.zip hello"
         end_message
 
         echo "centosユーザーのパスワードは"${PASSWORD}"です。"
