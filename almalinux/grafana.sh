@@ -41,12 +41,6 @@ if [ -e /etc/redhat-release ]; then
         end_message
 
 
-        start_message
-        echo "dnf updateを実行します"
-        echo "dnf update"
-        #dnf -y update
-        end_message
-
         #リポジトリ追加
         cat >/etc/yum.repos.d/grafana.repo <<'EOF'
 [grafana]
@@ -60,10 +54,17 @@ sslverify=1
 sslcacert=/etc/pki/tls/certs/ca-bundle.crt
 EOF
 
+        #アップデート
+        start_message
+        echo "dnf updateを実行します"
+        dnf -y update
+        end_message
+
         #インストール
         start_message
-        echo 'dnf install grafana'
+        echo 'grafanaをインストールします'
         echo dnf install grafana -y
+        dnf install grafana -y
         end_message
 
         #起動
@@ -84,13 +85,8 @@ EOF
         echo "パスワードは"${PASSWORD}"です。"
 
 
-
-
-
-
-
         #firewallのポート許可
-        echo "http(80番)とhttps(443番)の許可をしてます"
+        echo "3000番ポートを許可してます"
         start_message
         firewall-cmd --add-port=3000/tcp --permanent
         echo ""
