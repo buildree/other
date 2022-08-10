@@ -42,7 +42,7 @@ if [ -e /etc/redhat-release ]; then
         start_message
         echo "yum updateを実行します"
         echo ""
-        #yum -y update
+        yum -y update
         end_message
 
         #Go言語のインストール

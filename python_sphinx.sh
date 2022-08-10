@@ -75,9 +75,9 @@ EOF
         echo "pythonのリスト確認"
         pyenv install --list
         echo "python3.10.3のインストール"
-        env PYTHON_CONFIGURE_OPTS="--enable-shared" pyenv install 3.9.5
+        env PYTHON_CONFIGURE_OPTS="--enable-shared" pyenv install 3.10.3
         echo "pythonの設定を変更"
-        pyenv global 3.9.5
+        pyenv global 3.10.3
         end_message
 
         #pythonの確認
