@@ -3,9 +3,6 @@
 #rootユーザーで実行 or sudo権限ユーザー
 
 <<COMMENT
-作成者：サイトラボ
-URL：https://www.site-lab.jp/
-URL：https://buildree.com/
 
 注意点：conohaのポートは全て許可前提となります。もしくは80番、443番の許可をしておいてください。システムのfirewallはオン状態となります。centosユーザーのパスワードはランダム生成となります。最後に表示されます
 
@@ -29,13 +26,28 @@ echo ""
 
 USER_NAME="user"
 
-#CentOS7か確認
+#RedHat軽か確認
 if [ -e /etc/redhat-release ]; then
     DIST="redhat"
     DIST_VER=`cat /etc/redhat-release | sed -e "s/.*\s\([0-9]\)\..*/\1/"`
 
+
+
     if [ $DIST = "redhat" ];then
-      if [ $DIST_VER = "8" ];then
+      if [ $DIST_VER = "8" ] || [ $DIST_VER = "9" ];then
+
+      #SELinuxの確認
+SElinux=`which getenforce`
+if [ "`${SElinux}`" = "Disabled" ]; then
+  echo "SElinuxは無効なのでそのまま続けていきます"
+else
+  echo "SElinux有効のため、一時的に無効化します"
+  setenforce 0
+
+  getenforce
+  #exit 1
+fi
+
         #リポジトリのインストール
         start_message
         dnf config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
