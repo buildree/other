@@ -59,7 +59,7 @@ fi
 
         #必要なパッケージのインストール
         start_message
-        dnf -y install git zlib-devel bzip2 bzip2-devel readline-devel sqlite sqlite-devel openssl-devel gcc python3-devel libffi-devel
+        dnf -y install git zlib-devel bzip2 bzip2-devel readline-devel sqlite sqlite-devel openssl-devel make gcc python3-devel libffi-devel
         end_message
 
 
@@ -151,7 +151,6 @@ if [ -d "$DIR_PATH" ]; then
     # ディレクトリ移動
     cd $DIR_PATH
     django-admin startproject mysite .
-    python manage.py startapp polls
 
 else
     # ディレクトリが存在しない時の処理
@@ -165,29 +164,14 @@ fi
         #全てのAccessを許可する
         echo 外部からのアクセスを許可します
         echo "ALLOWED_HOSTS = [*]"
-        sed -i -e "28i ALLOWED_HOSTS = ["*"] \n"  /var/www/html/mysite/settings.py
-        sed -e "30d" /var/www/html/mysite/settings.py
-
-
-        #ファイルの作成(view)
-        cat >/var/www/html/polls/views.py <<'EOF'
-from django.http import HttpResponse
-
-
-def index(request):
-    return HttpResponse("Hello, world. You're at the polls index.")
-EOF
-
-        #ファイルの作成(view)
-        cat >/var/www/html/polls/urls.py <<'EOF'
-from django.urls import path
-
-from . import views
-
-urlpatterns = [
-    path("", views.index, name="index"),
-]
-EOF
+        sed -i -e '28i ALLOWED_HOSTS = ["*"] \n'  /var/www/html/mysite/settings.py
+        sed -i -e "30d" /var/www/html/mysite/settings.py
+        #言語設定
+        sed -i -e "107d" /var/www/html/mysite/settings.py
+        sed -i -e "107i  LANGUAGE_CODE = 'ja' \n"  /var/www/html/mysite/settings.py
+        #タイムゾーンを修正
+        sed -i -e "110d" /var/www/html/mysite/settings.py
+        sed -i -e "109i  TIME_ZONE = 'Asia/Tokyo' \n"  /var/www/html/mysite/settings.py
 
         end_message
 

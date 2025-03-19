@@ -33,11 +33,11 @@ if [ -e /etc/redhat-release ]; then
     DIST_VER=`cat /etc/redhat-release | sed -e "s/.*\s\([0-9]\)\..*/\1/"`
 
     if [ $DIST = "redhat" ];then
-      if [ $DIST_VER = "8" ];then
+      if [ $DIST_VER = "8" ] || [ $DIST_VER = "9" ];then
         #EPELリポジトリのインストール
         start_message
-        yum remove -y epel-release
-        yum -y install epel-release
+        dnf remove -y epel-release
+        dnf -y install epel-release
         end_message
 
 
@@ -77,8 +77,8 @@ EOF
 
         #ユーザー作成
         start_message
-        echo "centosユーザーを作成します"
-        USERNAME='centos'
+        echo "unicornユーザーを作成します"
+        USERNAME='unicorn'
         PASSWORD=$(more /dev/urandom  | tr -d -c '[:alnum:]' | fold -w 10 | head -1)
 
         echo "${PASSWORD}" | passwd --stdin "${USERNAME}"
@@ -112,15 +112,15 @@ EOF
 
 EOF
 
-        echo "centosユーザーのパスワードは"${PASSWORD}"です。"
+        echo "unicornユーザーのパスワードは"${PASSWORD}"です。"
 
       else
-        echo "CentOS7ではないため、このスクリプトは使えません。このスクリプトのインストール対象はCentOS7です。"
+        echo "対象OSではないため、このスクリプトは使えません。"
       fi
     fi
 
 else
-  echo "このスクリプトのインストール対象はCentOS7です。CentOS7以外は動きません。"
+  echo "対象OSではないため、このスクリプトは使えません。"
   cat <<EOF
   検証LinuxディストリビューションはDebian・Ubuntu・Fedora・Arch Linux（アーチ・リナックス）となります。
 EOF
