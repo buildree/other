@@ -47,6 +47,18 @@ if [ "$choice" = "y" ]; then
     if [ $DIST = "redhat" ];then
       if [ $DIST_VER = "8" ] || [ $DIST_VER = "9" ];then
 
+        #gitのインストール
+        sudo dnf -y install git
+
+        # ユーザーを作成
+        start_message
+        echo "ユーザー作成をします"
+        echo ""
+        curl -O https://raw.githubusercontent.com/site-lab/common/main/user/useradd.sh
+        source ./useradd.sh
+        end_message
+
+
         #gitなど必要な物をインストール
         start_message
         dnf groupinstall -y "Development Tools"
@@ -81,6 +93,7 @@ EOF
 
 start_message
 echo "OCI CLIのインストール処理を開始します"
+sudo su -l unicorn
 
 # 仮想環境用の一時スクリプトを作成
 cat > install_oci_cli.sh << 'EOF'
@@ -140,28 +153,20 @@ else
   exit 1
 fi
 
-end_message
-        #ユーザー作成
-        start_message
-        echo "unicornユーザーを作成します"
-        USERNAME='unicorn'
-        PASSWORD=$(more /dev/urandom | tr -d -c '[:alnum:]' | fold -w 10 | head -1)
-
-        # パスワードをファイルに保存する場合は権限を制限
-        echo "${USERNAME}:${PASSWORD}" > /root/unicorn_password.txt
-        chmod 600 /root/unicorn_password.txt
-        # または、ホームディレクトリに保存する前にユーザーを作成
-        useradd -m -s /bin/bash $USERNAME
-        echo "${USERNAME}:${PASSWORD}" > /home/${USERNAME}/unicorn_password.txt
-        chmod 600 /home/${USERNAME}/unicorn_password.txt
-        chown ${USERNAME}:${USERNAME} /home/${USERNAME}/unicorn_password.txt
-
-        # パスワードをユーザーに通知
-        echo "unicornユーザーのパスワードは /root/unicorn_password.txt と /home/unicorn/unicorn_password.txt に保存しました。"
-
-        umask 0002
-
         end_message
+# 終わりのメッセージをここに残す
+        echo "ed25519 SSH鍵が生成されました。"
+echo "秘密鍵: /home/${USERNAME}/${USERNAME}"
+echo "公開鍵: /home/${USERNAME}/.ssh/${USERNAME}.pub"
+echo ""
+echo "秘密鍵が /home/${USERNAME}/${USERNAME} に移動されました。"
+echo "秘密鍵のパーミッションは 600 に設定されています。"
+echo "このファイルを安全な方法でクライアントマシンに移動し、サーバーからは削除することを強く推奨します。"
+echo "秘密鍵はサーバー上に保管せず、使用するクライアントマシンにのみ保管してください。"
+echo "公開鍵をクライアントマシンの ~/.ssh/authorized_keys ファイルに追加してください。"
+echo "必要に応じて、秘密鍵にパスフレーズを設定してください。"
+echo "ユーザーのパスワードはランダムで生成されています。セキュリティの関係上表示したりファイルに残していないので新しく設定してください。"
+
       else
         echo "対象OSではないため、このスクリプトは使えません。"
       fi
