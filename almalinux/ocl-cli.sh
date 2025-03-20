@@ -8,6 +8,7 @@ cat <<EOF
   - このスクリプトは、AlmaLinux または Rocky Linux をインストールした直後のVPSやクラウドサーバーでの使用を想定しています。
   - 既存の環境で実行した場合、既存の設定やアプリケーションに影響を与える可能性があります。
   - 既存環境での実行は推奨されません。
+  - rootユーザーで実行する場合は、コマンド実行に十分注意してください。
   - 実行前に必ずバックアップを取得してください。
   - ConoHa のポートは全て許可前提となります。もしくは80番、443番の許可をしておいてください。
   - システムのfirewallはオン状態となります。
@@ -78,9 +79,12 @@ EOF
         pip install --upgrade pip
         end_message
 
-        start_message
-#!/bin/bash
+start_message
+echo "OCI CLIのインストール処理を開始します"
 
+# 仮想環境用の一時スクリプトを作成
+cat > install_oci_cli.sh << 'EOF'
+#!/bin/bash
 # 仮想環境のインストール
 echo "仮想環境のインストール"
 if [ ! -d "oracle-cli" ]; then
@@ -117,17 +121,26 @@ if [ $? -ne 0 ]; then
   exit 1
 fi
 
-# 仮想環境から抜ける
-echo "仮想環境から抜ける"
-deactivate
-if [ $? -ne 0 ]; then
-  echo "仮想環境からの非アクティブ化に失敗しました。"
+# 明示的に成功を示すファイルを作成
+touch /tmp/oci_cli_install_success
+EOF
+
+# 実行権限を付与
+chmod +x install_oci_cli.sh
+
+# 新しいシェルで実行
+bash ./install_oci_cli.sh
+
+# インストール成功の確認
+if [ -f /tmp/oci_cli_install_success ]; then
+  echo "OCI CLI のインストールおよび設定が完了しました。"
+  rm /tmp/oci_cli_install_success
+else
+  echo "OCI CLI のインストールに問題が発生しました。"
   exit 1
 fi
 
-echo "OCI CLI のインストールおよび設定が完了しました。"
-        end_message
-
+end_message
         #ユーザー作成
         start_message
         echo "unicornユーザーを作成します"
