@@ -147,9 +147,14 @@ end_message
         USERNAME='unicorn'
         PASSWORD=$(more /dev/urandom | tr -d -c '[:alnum:]' | fold -w 10 | head -1)
 
-        # パスワードをファイルに保存
+        # パスワードをファイルに保存する場合は権限を制限
         echo "${USERNAME}:${PASSWORD}" > /root/unicorn_password.txt
+        chmod 600 /root/unicorn_password.txt
+        # または、ホームディレクトリに保存する前にユーザーを作成
+        useradd -m -s /bin/bash $USERNAME
         echo "${USERNAME}:${PASSWORD}" > /home/${USERNAME}/unicorn_password.txt
+        chmod 600 /home/${USERNAME}/unicorn_password.txt
+        chown ${USERNAME}:${USERNAME} /home/${USERNAME}/unicorn_password.txt
 
         # パスワードをユーザーに通知
         echo "unicornユーザーのパスワードは /root/unicorn_password.txt と /home/unicorn/unicorn_password.txt に保存しました。"
