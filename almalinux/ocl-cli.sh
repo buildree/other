@@ -2,11 +2,8 @@
 
 #rootユーザーで実行 or sudo権限ユーザー
 
-<<COMMENT
-作成者：サイトラボ
-URL：https://www.site-lab.jp/
-URL：https://buildree.com/
-
+# 注意書き
+cat <<EOF
 注意点：
   - このスクリプトは、AlmaLinux または Rocky Linux をインストールした直後のVPSやクラウドサーバーでの使用を想定しています。
   - 既存の環境で実行した場合、既存の設定やアプリケーションに影響を与える可能性があります。
@@ -19,23 +16,30 @@ URL：https://buildree.com/
 目的：OCI CLIのインストール
 ・OCI CLI
 
-COMMENT
+実行してもよろしいですか？ (y/n): 
+EOF
 
+# ユーザーからの入力を受け取る
+read -r choice
 
-start_message(){
-echo ""
-echo "======================開始======================"
-echo ""
-}
+# 入力に応じて処理を分岐
+if [ "$choice" = "y" ]; then
+  # スクリプトの実行
 
-end_message(){
-echo ""
-echo "======================完了======================"
-echo ""
-}
+  start_message(){
+    echo ""
+    echo "======================開始======================"
+    echo ""
+  }
 
-#RedHat系か確認
-if [ -e /etc/redhat-release ]; then
+  end_message(){
+    echo ""
+    echo "======================完了======================"
+    echo ""
+  }
+
+  #RedHat系か確認
+  if [ -e /etc/redhat-release ]; then
     DIST="redhat"
     DIST_VER=`cat /etc/redhat-release | sed -e "s/.*\s\([0-9]\)\..*/\1/"`
 
@@ -44,9 +48,9 @@ if [ -e /etc/redhat-release ]; then
 
         #gitなど必要な物をインストール
         start_message
-        dnf  groupinstall -y "Development Tools"
+        dnf groupinstall -y "Development Tools"
         dnf install -y gcc wget openssl-devel bzip2-devel libffi-devel
-
+        end_message
 
         # dnf updateを実行
         start_message
@@ -60,7 +64,7 @@ if [ -e /etc/redhat-release ]; then
         echo "pythonのインストールをします"
         dnf install -y python3.12 python3.12-devel python3.12-pip
         echo "起動時に読み込まれるようにします"
-cat >/etc/profile.d/python.sh <<'EOF'
+        cat >/etc/profile.d/python.sh <<'EOF'
 export PATH="/usr/bin:$PATH" #python3.12のパス
 export PATH="/usr/bin:$PATH" #pipのインストールパス
 EOF
@@ -75,7 +79,7 @@ EOF
         end_message
 
         start_message
- #!/bin/bash
+#!/bin/bash
 
 # 仮想環境のインストール
 echo "仮想環境のインストール"
@@ -124,7 +128,6 @@ fi
 echo "OCI CLI のインストールおよび設定が完了しました。"
         end_message
 
-
         #ユーザー作成
         start_message
         echo "unicornユーザーを作成します"
@@ -145,13 +148,19 @@ echo "OCI CLI のインストールおよび設定が完了しました。"
         echo "対象OSではないため、このスクリプトは使えません。"
       fi
     fi
-
-else
-  echo "対象OSではないため、このスクリプトは使えません。"
-  cat <<EOF
-  検証LinuxディストリビューションはDebian・Ubuntu・Fedora・Arch Linux（アーチ・リナックス）となります。
+  else
+    echo "対象OSではないため、このスクリプトは使えません。"
+    cat <<EOF
+    検証LinuxディストリビューションはDebian・Ubuntu・Fedora・Arch Linux（アーチ・リナックス）となります。
 EOF
+  fi
+  exec $SHELL -l
+elif [ "$choice" = "n" ]; then
+  # スクリプトの実行を中止
+  echo "スクリプトの実行を中止しました。"
+  exit 0
+else
+  # 無効な入力
+  echo "無効な入力です。y または n を入力してください。"
+  exit 1
 fi
-
-
-exec $SHELL -l
