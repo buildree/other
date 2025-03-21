@@ -52,10 +52,14 @@ if [ "$choice" = "y" ]; then
         start_message
         echo "ユーザー作成をします"
         echo ""
-        curl -O https://raw.githubusercontent.com/site-lab/common/main/user/useradd.sh
-        source ./useradd.sh
+        
+        # ユーザー作成スクリプトを/tmpにダウンロードして実行
+        curl -o /tmp/useradd.sh https://raw.githubusercontent.com/site-lab/common/main/user/useradd.sh
+        chmod +x /tmp/useradd.sh
+        source /tmp/useradd.sh
+        # 実行後に削除
+        rm -f /tmp/useradd.sh
         end_message
-
 
         #gitなど必要な物をインストール
         start_message
@@ -67,8 +71,13 @@ if [ "$choice" = "y" ]; then
         start_message
         echo "dnf updateを実行します"
         echo ""
-        curl -OL https://buildree.com/download/common/system/update.sh -o update.sh
-        source ./update.sh
+        
+        # アップデートスクリプトをGitHubから/tmpにダウンロードして実行
+        curl -o /tmp/update.sh https://raw.githubusercontent.com/site-lab/common/main/system/update.sh
+        chmod +x /tmp/update.sh
+        source /tmp/update.sh
+        # 実行後に削除
+        rm -f /tmp/update.sh
         end_message
 
         start_message
@@ -89,17 +98,16 @@ EOF
         pip install --upgrade pip
         end_message
 
-start_message
-echo "OCI CLIのインストール処理を開始します"
-sudo su -l unicorn
+        start_message
+        echo "OCI CLIのインストール処理を開始します"
 
-# 仮想環境用の一時スクリプトを作成
-cat > install_oci_cli.sh << 'EOF'
+        # 仮想環境用のスクリプトを作成
+        cat > /tmp/install_oci_cli.sh << 'EOF'
 #!/bin/bash
 # 仮想環境のインストール
 echo "仮想環境のインストール"
-if [ ! -d "oracle-cli" ]; then
-  python -m venv oracle-cli
+if [ ! -d "$HOME/oracle-cli" ]; then
+  python -m venv $HOME/oracle-cli
   if [ $? -ne 0 ]; then
     echo "仮想環境の作成に失敗しました。"
     exit 1
@@ -110,7 +118,7 @@ fi
 
 # 仮想環境をアクティブ化
 echo "仮想環境をアクティブ化"
-source oracle-cli/bin/activate
+source $HOME/oracle-cli/bin/activate
 if [ $? -ne 0 ]; then
   echo "仮想環境のアクティブ化に失敗しました。"
   exit 1
@@ -132,38 +140,59 @@ if [ $? -ne 0 ]; then
   exit 1
 fi
 
+# .bashrcに仮想環境の設定を追加
+if ! grep -q "oracle-cli/bin/activate" "$HOME/.bashrc"; then
+  echo -e "\n# Oracle CLI 仮想環境のアクティベーション" >> "$HOME/.bashrc"
+  echo "alias oci-activate='source $HOME/oracle-cli/bin/activate'" >> "$HOME/.bashrc"
+  echo "# ログイン時に自動的に仮想環境をアクティブ化したい場合は、次の行のコメントを解除してください" >> "$HOME/.bashrc"
+  echo "# source $HOME/oracle-cli/bin/activate" >> "$HOME/.bashrc"
+fi
+
 # 明示的に成功を示すファイルを作成
 touch /tmp/oci_cli_install_success
 EOF
 
-# 実行権限を付与
-chmod +x install_oci_cli.sh
+        # 実行権限を付与
+        chmod +x /tmp/install_oci_cli.sh
+        # unicornユーザー所有にする
+        chown unicorn:unicorn /tmp/install_oci_cli.sh
 
-# 新しいシェルで実行
-bash ./install_oci_cli.sh
+        # unicornユーザーとして実行する（サブシェルで実行せず、直接コマンドを実行）
+        sudo -u unicorn bash /tmp/install_oci_cli.sh
 
-# インストール成功の確認
-if [ -f /tmp/oci_cli_install_success ]; then
-  echo "OCI CLI のインストールおよび設定が完了しました。"
-  rm /tmp/oci_cli_install_success
-else
-  echo "OCI CLI のインストールに問題が発生しました。"
-  exit 1
-fi
+        # インストール成功の確認
+        if [ -f /tmp/oci_cli_install_success ]; then
+          echo "OCI CLI のインストールおよび設定が完了しました。"
+          rm /tmp/oci_cli_install_success
+        else
+          echo "OCI CLI のインストールに問題が発生しました。"
+          exit 1
+        fi
+
+        # 一時ファイルの削除
+        rm -f /tmp/install_oci_cli.sh
 
         end_message
-# 終わりのメッセージをここに残す
+        
+        # 終わりのメッセージをここに残す
         echo "ed25519 SSH鍵が生成されました。"
-echo "秘密鍵: /home/${USERNAME}/${USERNAME}"
-echo "公開鍵: /home/${USERNAME}/.ssh/${USERNAME}.pub"
-echo ""
-echo "秘密鍵が /home/${USERNAME}/${USERNAME} に移動されました。"
-echo "秘密鍵のパーミッションは 600 に設定されています。"
-echo "このファイルを安全な方法でクライアントマシンに移動し、サーバーからは削除することを強く推奨します。"
-echo "秘密鍵はサーバー上に保管せず、使用するクライアントマシンにのみ保管してください。"
-echo "公開鍵をクライアントマシンの ~/.ssh/authorized_keys ファイルに追加してください。"
-echo "必要に応じて、秘密鍵にパスフレーズを設定してください。"
-echo "ユーザーのパスワードはランダムで生成されています。セキュリティの関係上表示したりファイルに残していないので新しく設定してください。"
+        echo "秘密鍵: /home/${USERNAME}/${USERNAME}"
+        echo "公開鍵: /home/${USERNAME}/.ssh/${USERNAME}.pub"
+        echo ""
+        echo "秘密鍵が /home/${USERNAME}/${USERNAME} に移動されました。"
+        echo "秘密鍵のパーミッションは 600 に設定されています。"
+        echo "このファイルを安全な方法でクライアントマシンに移動し、サーバーからは削除することを強く推奨します。"
+        echo "秘密鍵はサーバー上に保管せず、使用するクライアントマシンにのみ保管してください。"
+        echo "公開鍵をクライアントマシンの ~/.ssh/authorized_keys ファイルに追加してください。"
+        echo "必要に応じて、秘密鍵にパスフレーズを設定してください。"
+        echo "ユーザーのパスワードはランダムで生成されています。セキュリティの関係上表示したりファイルに残していないので新しく設定してください。"
+        
+        # OCI CLI使用方法の説明を追加
+        echo ""
+        echo "OCI CLIの使用方法："
+        echo "1. unicornユーザーでログイン: su - unicorn"
+        echo "2. 仮想環境を有効化: oci-activate または source ~/oracle-cli/bin/activate"
+        echo "3. OCI CLIを使用: oci <コマンド>"
 
       else
         echo "対象OSではないため、このスクリプトは使えません。"
