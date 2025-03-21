@@ -12,8 +12,8 @@ cat <<EOF
   - 実行前に必ずバックアップを取得してください。
   - unicornユーザーのパスワードはランダム生成となります。画面に表示もパスワード保存もされません。新しく設定してください
 
-目的：OCI CLIのインストール
-・OCI CLI
+目的：
+・OCI CLIのインストール
 
 実行してもよろしいですか？ (y/n): 
 EOF
@@ -195,6 +195,7 @@ EOF
         # 一時ファイルの削除
         rm -f /tmp/install_oci_cli.sh
 
+        # ユーザーの切り替え
         end_message
         
         # 終わりのメッセージをここに残す
@@ -214,8 +215,11 @@ EOF
         echo ""
         echo "OCI CLIの使用方法："
         echo "1. unicornユーザーでログイン: su - unicorn"
-        echo "2. 仮想環境を有効化: oci-activate または source ~/oracle-cli/bin/activate"
+        echo "2. 仮想環境を有効化: oci-activate または source oracle-cli/bin/activate"
         echo "3. OCI CLIを使用: oci <コマンド>"
+        echo "例 oci --version にてバージョン表示"
+        sudo su -l unicorn
+
 
       else
         echo "対象OSではないため、このスクリプトは使えません。"
