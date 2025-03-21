@@ -84,10 +84,14 @@ if [ "$choice" = "y" ]; then
         echo "pythonのインストールをします"
         dnf install -y python3.12 python3.12-devel python3.12-pip
         echo "起動時に読み込まれるようにします"
-        cat >/etc/profile.d/python.sh <<'EOF'
-export PATH="/usr/bin:$PATH" #python3.12のパス
-export PATH="/usr/bin:$PATH" #pipのインストールパス
+        
+        # /usr/local/binをPATHに追加
+        if ! grep -q "/usr/local/bin" /etc/profile.d/python.sh 2>/dev/null; then
+          cat >/etc/profile.d/python.sh <<'EOF'
+export PATH="/usr/local/bin:/usr/bin:$PATH"
 EOF
+        fi
+        
         source /etc/profile.d/python.sh
         sudo ln -sf /usr/bin/python3 /usr/bin/python
         sudo ln -s /usr/bin/pip3.12 /usr/bin/pip
@@ -95,7 +99,18 @@ EOF
 
         start_message
         echo "pipのアップグレードをします"
-        pip install --upgrade pip
+        # システム全体のpipをアップグレード
+        python3.12 -m pip install --upgrade pip
+        
+        # パスを確認
+        echo "PATHを確認:"
+        echo $PATH
+        
+        # pipの場所とバージョンを確認
+        echo "pipの場所:"
+        which pip
+        echo "pipのバージョン:"
+        pip --version
         end_message
 
         start_message
@@ -121,6 +136,14 @@ echo "仮想環境をアクティブ化"
 source $HOME/oracle-cli/bin/activate
 if [ $? -ne 0 ]; then
   echo "仮想環境のアクティブ化に失敗しました。"
+  exit 1
+fi
+
+# 仮想環境内のpipをアップグレード
+echo "仮想環境内のpipをアップグレード"
+pip install --upgrade pip
+if [ $? -ne 0 ]; then
+  echo "仮想環境内のpipのアップグレードに失敗しました。"
   exit 1
 fi
 
