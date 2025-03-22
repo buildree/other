@@ -219,7 +219,7 @@ EOF
         echo "OCI CLIの使用方法："
         echo "1. unicornユーザーでログイン: su - unicorn"
         echo "2. 仮想環境を有効化: oci-activate または source oracle-cli/bin/activate"
-        echo "3. 仮想環境を無効化: deactivate
+        echo "3. 仮想環境を無効化: deactivate"
         echo "4. OCI CLIを使用: oci <コマンド>"
         echo "例 oci --version にてバージョン表示"
         sudo su -l unicorn
