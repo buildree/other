@@ -1,6 +1,4 @@
-#!/bin/sh
-
-#rootユーザーで実行 or sudo権限ユーザー
+#!/bin/bash
 
 # 注意書き
 cat <<EOF
@@ -40,87 +38,258 @@ if [ "$choice" = "y" ]; then
     echo ""
   }
 
-  #RedHat系か確認
-  if [ -e /etc/redhat-release ]; then
-    DIST="redhat"
-    DIST_VER=`cat /etc/redhat-release | sed -e "s/.*\s\([0-9]\)\..*/\1/"`
+  hash_file="/tmp/hashes.txt"
+  expected_sha3_512="bddc1c5783ce4f81578362144f2b145f7261f421a405ed833d04b0774a5f90e6541a0eec5823a96efd9d3b8990f32533290cbeffdd763dc3dd43811c6b45cfbe"
 
-    if [ $DIST = "redhat" ];then
-      if [ $DIST_VER = "8" ] || [ $DIST_VER = "9" ];then
+  # リポジトリのシェルファイルの格納場所
+  update_file_path="/tmp/update.sh"
+  useradd_file_path="/tmp/useradd.sh"
 
-        #gitのインストール
-        sudo dnf -y install git
 
-        # ユーザーを作成
-        start_message
-        echo "ユーザー作成をします"
-        echo ""
-        
-        # ユーザー作成スクリプトを/tmpにダウンロードして実行
-        curl -o /tmp/useradd.sh https://raw.githubusercontent.com/site-lab/common/main/user/useradd.sh
-        chmod +x /tmp/useradd.sh
-        source /tmp/useradd.sh
-        # 実行後に削除
-        rm -f /tmp/useradd.sh
-        end_message
+  # ディストリビューションとバージョンの検出
+  if [ -f /etc/os-release ]; then
+    . /etc/os-release
+    DIST_ID=$ID
+    DIST_VERSION_ID=$VERSION_ID
+    DIST_NAME=$NAME
+    # メジャーバージョン番号の抽出（8.10から8を取得）
+    DIST_MAJOR_VERSION=$(echo "$VERSION_ID" | cut -d. -f1)
+  elif [ -f /etc/redhat-release ]; then
+    if grep -q "CentOS Stream" /etc/redhat-release; then
+      DIST_ID="centos-stream"
+      DIST_VERSION_ID=$(grep -o -E '[0-9]+(\.[0-9]+)?' /etc/redhat-release | head -1)
+      DIST_MAJOR_VERSION=$(echo "$DIST_VERSION_ID" | cut -d. -f1)
+      DIST_NAME="CentOS Stream"
+    else
+      DIST_ID="redhat"
+      DIST_VERSION_ID=$(grep -o -E '[0-9]+(\.[0-9]+)?' /etc/redhat-release | head -1)
+      DIST_MAJOR_VERSION=$(echo "$DIST_VERSION_ID" | cut -d. -f1)
+      DIST_NAME=$(cat /etc/redhat-release)
+    fi
+  else
+    echo "サポートされていないディストリビューションです"
+    exit 1
+  fi
 
-        #gitなど必要な物をインストール
-        start_message
-        dnf groupinstall -y "Development Tools"
-        dnf install -y gcc wget openssl-devel bzip2-devel libffi-devel
-        end_message
+  echo "検出されたディストリビューション: $DIST_NAME $DIST_VERSION_ID"
 
-        # dnf updateを実行
-        start_message
-        echo "dnf updateを実行します"
-        echo ""
-        
-        # アップデートスクリプトをGitHubから/tmpにダウンロードして実行
-        curl -o /tmp/update.sh https://raw.githubusercontent.com/site-lab/common/main/system/update.sh
-        chmod +x /tmp/update.sh
-        source /tmp/update.sh
-        # 実行後に削除
-        rm -f /tmp/update.sh
-        end_message
+  # Redhat系で8または9の場合のみ処理を実行
+  if [ -e /etc/redhat-release ] && [[ "$DIST_MAJOR_VERSION" -eq 8 || "$DIST_MAJOR_VERSION" -eq 9 ]]; then
 
-        start_message
-        echo "pythonのインストールをします"
-        dnf install -y python3.12 python3.12-devel python3.12-pip
-        echo "起動時に読み込まれるようにします"
-        
-        # /usr/local/binをPATHに追加
-        if ! grep -q "/usr/local/bin" /etc/profile.d/python.sh 2>/dev/null; then
-          cat >/etc/profile.d/python.sh <<'EOF'
+    # ハッシュファイルのダウンロード
+    start_message
+    if ! curl --tlsv1.3 --proto https -o "$hash_file" https://raw.githubusercontent.com/buildree/common/main/other/hashes.txt; then
+      echo "エラー: ファイルのダウンロードに失敗しました"
+      exit 1
+    fi
+
+    # ファイルのSHA3-512ハッシュ値を計算
+    actual_sha3_512=$(sha3sum -a 512 "$hash_file" 2>/dev/null | awk '{print $1}')
+    # sha3sumコマンドが存在しない場合の代替手段
+    if [ -z "$actual_sha3_512" ]; then
+      actual_sha3_512=$(openssl dgst -sha3-512 "$hash_file" 2>/dev/null | awk '{print $2}')
+
+      if [ -z "$actual_sha3_512" ]; then
+        echo "エラー: SHA3-512ハッシュの計算に失敗しました。sha3sumまたはOpenSSLがインストールされていることを確認してください。"
+        rm -f "$hash_file"
+        exit 1
+      fi
+    fi
+
+    # ハッシュ値を比較
+    if [ "$actual_sha3_512" == "$expected_sha3_512" ]; then
+      echo "ハッシュ値は一致します。ファイルを保存します。"
+      
+      # ハッシュ値ファイルの読み込み - ダウンロード成功後に行う
+      repository_hash=$(grep "^repository_hash_sha512=" "$hash_file" | cut -d '=' -f 2)
+      update_hash=$(grep "^update_hash_sha512=" "$hash_file" | cut -d '=' -f 2)
+      repository_hash_sha3=$(grep "^repository_hash_sha3_512=" "$hash_file" | cut -d '=' -f 2)
+      update_hash_sha3=$(grep "^update_hash_sha3_512=" "$hash_file" | cut -d '=' -f 2)
+      useradd_hash=$(grep "^useradd_hash_sha512=" "$hash_file" | cut -d '=' -f 2)
+      useradd_hash_sha3=$(grep "^useradd_hash_sha3_512=" "$hash_file" | cut -d '=' -f 2)
+    else
+      echo "ハッシュ値が一致しません。ファイルを削除します。"
+      echo "期待されるSHA3-512: $expected_sha3_512"
+      echo "実際のSHA3-512: $actual_sha3_512"
+      rm -f "$hash_file"
+      exit 1
+    fi
+    end_message
+
+    # gitのインストール
+    sudo dnf -y install git
+
+    # ユーザー作成スクリプトをダウンロード
+    if ! curl --tlsv1.3 --proto https -o "$useradd_file_path" https://raw.githubusercontent.com/buildree/common/main/user/useradd.sh; then
+      echo "エラー: ファイルのダウンロードに失敗しました"
+      exit 1
+    fi
+
+    # ファイルの存在を確認
+    if [ ! -f "$useradd_file_path" ]; then
+      echo "エラー: ダウンロードしたファイルが見つかりません: $useradd_file_path"
+      exit 1
+    fi
+
+    # ファイルのSHA512ハッシュ値を計算
+    actual_sha512=$(sha512sum "$useradd_file_path" 2>/dev/null | awk '{print $1}')
+    if [ -z "$actual_sha512" ]; then
+      echo "エラー: SHA512ハッシュの計算に失敗しました"
+      exit 1
+    fi
+
+    # ファイルのSHA3-512ハッシュ値を計算
+    actual_sha3_512=$(sha3sum -a 512 "$useradd_file_path" 2>/dev/null | awk '{print $1}')
+
+    # システムにsha3sumがない場合の代替手段
+    if [ -z "$actual_sha3_512" ]; then
+      # OpenSSLを使用する方法
+      actual_sha3_512=$(openssl dgst -sha3-512 "$useradd_file_path" 2>/dev/null | awk '{print $2}')
+      
+      # それでも取得できない場合はエラー
+      if [ -z "$actual_sha3_512" ]; then
+        echo "エラー: SHA3-512ハッシュの計算に失敗しました。sha3sumまたはOpenSSLがインストールされていることを確認してください"
+        exit 1
+      fi
+    fi
+
+    # 両方のハッシュ値が一致した場合のみ処理を続行
+    if [ "$actual_sha512" == "$useradd_hash" ] && [ "$actual_sha3_512" == "$useradd_hash_sha3" ]; then
+      echo "ハッシュ検証が成功しました。ユーザー作成を続行します。"
+      
+      # 実行権限を付与
+      chmod +x "$useradd_file_path"
+      
+      # スクリプトを実行
+      source "$useradd_file_path"
+      
+      # 実行後に削除
+      rm -f "$useradd_file_path"
+    else
+      echo "エラー: ハッシュ検証に失敗しました。"
+      echo "期待されるSHA512: $useradd_hash"
+      echo "実際のSHA512: $actual_sha512"
+      echo "期待されるSHA3-512: $useradd_hash_sha3"
+      echo "実際のSHA3-512: $actual_sha3_512"
+      
+      # セキュリティリスクを軽減するため、検証に失敗したファイルを削除
+      rm -f "$useradd_file_path"
+      exit 1
+    fi
+    end_message
+
+    # 必要な物をインストール
+    start_message
+    dnf groupinstall -y "Development Tools"
+    dnf install -y gcc wget openssl-devel bzip2-devel libffi-devel
+    end_message
+
+    # dnf updateを実行
+    start_message
+    echo "dnf updateを実行します"
+    echo ""
+    
+    # dnf updateを実行
+    start_message
+    echo "システムをアップデートします"
+    # アップデートスクリプトをGitHubから/tmpにダウンロードして実行
+    if ! curl --tlsv1.3 --proto https -o "$update_file_path" https://raw.githubusercontent.com/buildree/common/main/system/update.sh; then
+      echo "エラー: ファイルのダウンロードに失敗しました"
+      exit 1
+    fi
+
+    # ファイルの存在を確認
+    if [ ! -f "$update_file_path" ]; then
+      echo "エラー: ダウンロードしたファイルが見つかりません: $update_file_path"
+      exit 1
+    fi
+
+    # ファイルのSHA512ハッシュ値を計算
+    actual_sha512=$(sha512sum "$update_file_path" 2>/dev/null | awk '{print $1}')
+    if [ -z "$actual_sha512" ]; then
+      echo "エラー: SHA512ハッシュの計算に失敗しました"
+      exit 1
+    fi
+
+    # ファイルのSHA3-512ハッシュ値を計算
+    actual_sha3_512=$(sha3sum -a 512 "$update_file_path" 2>/dev/null | awk '{print $1}')
+
+    # システムにsha3sumがない場合の代替手段
+    if [ -z "$actual_sha3_512" ]; then
+      # OpenSSLを使用する方法
+      actual_sha3_512=$(openssl dgst -sha3-512 "$update_file_path" 2>/dev/null | awk '{print $2}')
+      
+      # それでも取得できない場合はエラー
+      if [ -z "$actual_sha3_512" ]; then
+        echo "エラー: SHA3-512ハッシュの計算に失敗しました。sha3sumまたはOpenSSLがインストールされていることを確認してください"
+        exit 1
+      fi
+    fi
+
+    # 両方のハッシュ値が一致した場合のみ処理を続行
+    if [ "$actual_sha512" == "$update_hash" ] && [ "$actual_sha3_512" == "$update_hash_sha3" ]; then
+      echo "両方のハッシュ値が一致します。"
+      echo "このスクリプトは安全のためインストール作業を実施します"
+      
+      # 実行権限を付与
+      chmod +x "$update_file_path"
+      
+      # スクリプトを実行
+      source "$update_file_path"
+      
+      # 実行後に削除
+      rm -f "$update_file_path"
+    else
+      echo "ハッシュ値が一致しません！"
+      echo "期待されるSHA512: $update_hash"
+      echo "実際のSHA512: $actual_sha512"
+      echo "期待されるSHA3-512: $update_hash_sha3"
+      echo "実際のSHA3-512: $actual_sha3_512"
+      
+      # セキュリティリスクを軽減するため、検証に失敗したファイルを削除
+      rm -f "$update_file_path"
+      exit 1 #一致しない場合は終了
+    fi
+    end_message
+
+    start_message
+    echo "pythonのインストールをします"
+    dnf install -y python3.12 python3.12-devel python3.12-pip
+    echo "起動時に読み込まれるようにします"
+    
+    # /usr/local/binをPATHに追加
+    if ! grep -q "/usr/local/bin" /etc/profile.d/python.sh 2>/dev/null; then
+      cat >/etc/profile.d/python.sh <<'EOF'
 export PATH="/usr/local/bin:/usr/bin:$PATH"
 EOF
-        fi
-        
-        source /etc/profile.d/python.sh
-        sudo ln -sf /usr/bin/python3 /usr/bin/python
-        sudo ln -s /usr/bin/pip3.12 /usr/bin/pip
-        end_message
+    fi
+    
+    source /etc/profile.d/python.sh
+    sudo ln -sf /usr/bin/python3 /usr/bin/python
+    sudo ln -s /usr/bin/pip3.12 /usr/bin/pip
+    end_message
 
-        start_message
-        echo "pipのアップグレードをします"
-        # システム全体のpipをアップグレード
-        python3.12 -m pip install --upgrade pip
-        
-        # パスを確認
-        echo "PATHを確認:"
-        echo $PATH
-        
-        # pipの場所とバージョンを確認
-        echo "pipの場所:"
-        which pip
-        echo "pipのバージョン:"
-        pip --version
-        end_message
+    start_message
+    echo "pipのアップグレードをします"
+    # システム全体のpipをアップグレード
+    python3.12 -m pip install --upgrade pip
+    
+    # パスを確認
+    echo "PATHを確認:"
+    echo $PATH
+    
+    # pipの場所とバージョンを確認
+    echo "pipの場所:"
+    which pip
+    echo "pipのバージョン:"
+    pip --version
+    end_message
 
-        start_message
-        echo "OCI CLIのインストール処理を開始します"
+    start_message
+    echo "OCI CLIのインストール処理を開始します"
 
-        # 仮想環境用のスクリプトを作成
-        cat > /tmp/install_oci_cli.sh << 'EOF'
+    # 仮想環境用のスクリプトを作成
+    cat > /tmp/install_oci_cli.sh << 'EOF'
 #!/bin/bash
 # 仮想環境のインストール
 echo "仮想環境のインストール"
@@ -178,64 +347,55 @@ fi
 touch /tmp/oci_cli_install_success
 EOF
 
-        # 実行権限を付与
-        chmod +x /tmp/install_oci_cli.sh
-        # unicornユーザー所有にする
-        chown unicorn:unicorn /tmp/install_oci_cli.sh
+    # 実行権限を付与
+    chmod +x /tmp/install_oci_cli.sh
+    # unicornユーザー所有にする
+    chown unicorn:unicorn /tmp/install_oci_cli.sh
 
-        # unicornユーザーとして実行する（サブシェルで実行せず、直接コマンドを実行）
-        sudo -u unicorn bash /tmp/install_oci_cli.sh
+    # unicornユーザーとして実行する（サブシェルで実行せず、直接コマンドを実行）
+    sudo -u unicorn bash /tmp/install_oci_cli.sh
 
-        # インストール成功の確認
-        if [ -f /tmp/oci_cli_install_success ]; then
-          echo "OCI CLI のインストールおよび設定が完了しました。"
-          rm /tmp/oci_cli_install_success
-        else
-          echo "OCI CLI のインストールに問題が発生しました。"
-          exit 1
-        fi
-
-        # 一時ファイルの削除
-        rm -f /tmp/install_oci_cli.sh
-
-        # ユーザーの切り替え
-        end_message
-        
-        # 終わりのメッセージをここに残す
-        echo "ed25519 SSH鍵が生成されました。"
-        echo "秘密鍵: /home/${USERNAME}/${USERNAME}"
-        echo "公開鍵: /home/${USERNAME}/.ssh/${USERNAME}.pub"
-        echo ""
-        echo "秘密鍵が /home/${USERNAME}/${USERNAME} に移動されました。"
-        echo "秘密鍵のパーミッションは 600 に設定されています。"
-        echo "このファイルを安全な方法でクライアントマシンに移動し、サーバーからは削除することを強く推奨します。"
-        echo "秘密鍵はサーバー上に保管せず、使用するクライアントマシンにのみ保管してください。"
-        echo "公開鍵をクライアントマシンの ~/.ssh/authorized_keys ファイルに追加してください。"
-        echo "必要に応じて、秘密鍵にパスフレーズを設定してください。"
-        echo "ユーザーのパスワードはランダムで生成されています。セキュリティの関係上表示したりファイルに残していないので新しく設定してください。"
-        
-        # OCI CLI使用方法の説明を追加
-        echo ""
-        echo "OCI CLIの使用方法："
-        echo "1. unicornユーザーでログイン: su - unicorn"
-        echo "2. 仮想環境を有効化: oci-activate または source oracle-cli/bin/activate"
-        echo "3. 仮想環境を無効化: deactivate"
-        echo "4. OCI CLIを使用: oci <コマンド>"
-        echo "例 oci --version にてバージョン表示"
-        sudo su -l unicorn
-
-
-      else
-        echo "対象OSではないため、このスクリプトは使えません。"
-      fi
+    # インストール成功の確認
+    if [ -f /tmp/oci_cli_install_success ]; then
+      echo "OCI CLI のインストールおよび設定が完了しました。"
+      rm /tmp/oci_cli_install_success
+    else
+      echo "OCI CLI のインストールに問題が発生しました。"
+      exit 1
     fi
+
+    # 一時ファイルの削除
+    rm -f /tmp/install_oci_cli.sh
+
+    # ユーザーの切り替え
+    end_message
+    
+    # 終わりのメッセージをここに残す
+    echo "ed25519 SSH鍵が生成されました。"
+    echo "秘密鍵: /home/${USERNAME}/${USERNAME}"
+    echo "公開鍵: /home/${USERNAME}/.ssh/${USERNAME}.pub"
+    echo ""
+    echo "秘密鍵が /home/${USERNAME}/${USERNAME} に移動されました。"
+    echo "秘密鍵のパーミッションは 600 に設定されています。"
+    echo "このファイルを安全な方法でクライアントマシンに移動し、サーバーからは削除することを強く推奨します。"
+    echo "秘密鍵はサーバー上に保管せず、使用するクライアントマシンにのみ保管してください。"
+    echo "公開鍵をクライアントマシンの ~/.ssh/authorized_keys ファイルに追加してください。"
+    echo "必要に応じて、秘密鍵にパスフレーズを設定してください。"
+    echo "ユーザーのパスワードはランダムで生成されています。セキュリティの関係上表示したりファイルに残していないので新しく設定してください。"
+    
+    # OCI CLI使用方法の説明を追加
+    echo ""
+    echo "OCI CLIの使用方法："
+    echo "1. unicornユーザーでログイン: su - unicorn"
+    echo "2. 仮想環境を有効化: oci-activate または source oracle-cli/bin/activate"
+    echo "3. 仮想環境を無効化: deactivate"
+    echo "4. OCI CLIを使用: oci <コマンド>"
+    echo "例 oci --version にてバージョン表示"
+    sudo su -l unicorn
+
   else
     echo "対象OSではないため、このスクリプトは使えません。"
-    cat <<EOF
-    検証LinuxディストリビューションはDebian・Ubuntu・Fedora・Arch Linux（アーチ・リナックス）となります。
-EOF
   fi
-  exec $SHELL -l
 elif [ "$choice" = "n" ]; then
   # スクリプトの実行を中止
   echo "スクリプトの実行を中止しました。"
