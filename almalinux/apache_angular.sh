@@ -35,6 +35,13 @@ read -p "Angularプロジェクト名を入力してください (デフォル�
 PROJECT_NAME=${PROJECT_NAME:-buildree-app}
 echo "プロジェクト名: $PROJECT_NAME"
 
+hash_file="/tmp/hashes.txt"
+expected_sha3_512="bddc1c5783ce4f81578362144f2b145f7261f421a405ed833d04b0774a5f90e6541a0eec5823a96efd9d3b8990f32533290cbeffdd763dc3dd43811c6b45cfbe"
+
+# リポジトリのシェルファイルの格納場所
+update_file_path="/tmp/update.sh"
+useradd_file_path="/tmp/useradd.sh"
+
 # ディストリビューションとバージョンの検出
 if [ -f /etc/os-release ]; then
     . /etc/os-release
@@ -82,6 +89,46 @@ fi
 if [ -e /etc/redhat-release ]; then
     if [ "$DIST_MAJOR_VERSION" = "8" ] || [ "$DIST_MAJOR_VERSION" = "9" ]; then
         # システム関連のインストールと設定を実行するスクリプト部分
+        
+        # ハッシュファイルのダウンロード
+        start_message
+        if ! curl --tlsv1.3 --proto https -o "$hash_file" https://raw.githubusercontent.com/buildree/common/main/other/hashes.txt; then
+            echo "エラー: ファイルのダウンロードに失敗しました"
+            exit 1
+        fi
+
+        # ファイルのSHA3-512ハッシュ値を計算
+        actual_sha3_512=$(sha3sum -a 512 "$hash_file" 2>/dev/null | awk '{print $1}')
+        # sha3sumコマンドが存在しない場合の代替手段
+        if [ -z "$actual_sha3_512" ]; then
+            actual_sha3_512=$(openssl dgst -sha3-512 "$hash_file" 2>/dev/null | awk '{print $2}')
+
+            if [ -z "$actual_sha3_512" ]; then
+                echo "エラー: SHA3-512ハッシュの計算に失敗しました。sha3sumまたはOpenSSLがインストールされていることを確認してください。"
+                rm -f "$hash_file"
+                exit 1
+            fi
+        fi
+
+        # ハッシュ値を比較
+        if [ "$actual_sha3_512" == "$expected_sha3_512" ]; then
+            echo "ハッシュ値は一致します。ファイルを保存します。"
+            
+            # ハッシュ値ファイルの読み込み - ダウンロード成功後に行う
+            repository_hash=$(grep "^repository_hash_sha512=" "$hash_file" | cut -d '=' -f 2)
+            update_hash=$(grep "^update_hash_sha512=" "$hash_file" | cut -d '=' -f 2)
+            repository_hash_sha3=$(grep "^repository_hash_sha3_512=" "$hash_file" | cut -d '=' -f 2)
+            update_hash_sha3=$(grep "^update_hash_sha3_512=" "$hash_file" | cut -d '=' -f 2)
+            useradd_hash=$(grep "^useradd_hash_sha512=" "$hash_file" | cut -d '=' -f 2)
+            useradd_hash_sha3=$(grep "^useradd_hash_sha3_512=" "$hash_file" | cut -d '=' -f 2)
+        else
+            echo "ハッシュ値が一致しません。ファイルを削除します。"
+            echo "期待されるSHA3-512: $expected_sha3_512"
+            echo "実際のSHA3-512: $actual_sha3_512"
+            rm -f "$hash_file"
+            exit 1
+        fi
+        end_message
 
         # Gitリポジトリのインストール
         start_message "Gitリポジトリのインストール"
@@ -89,15 +136,68 @@ if [ -e /etc/redhat-release ]; then
         dnf -y install git
         end_message "Gitリポジトリのインストール"
 
-        # システムアップデート
-        start_message "システムアップデート"
-        echo "システムアップデートスクリプトを取得しています..."
-        curl --tlsv1.3 --proto https -o /tmp/update.sh https://raw.githubusercontent.com/buildree/common/main/system/update.sh
-        chmod +x /tmp/update.sh
-        echo "システムアップデートを実行中..."
-        source /tmp/update.sh
-        rm -f /tmp/update.sh
-        end_message "システムアップデート"
+        # dnf updateを実行
+        start_message
+        echo "システムをアップデートします"
+        # アップデートスクリプトをGitHubから/tmpにダウンロードして実行
+        if ! curl --tlsv1.3 --proto https -o "$update_file_path" https://raw.githubusercontent.com/buildree/common/main/system/update.sh; then
+            echo "エラー: ファイルのダウンロードに失敗しました"
+            exit 1
+        fi
+
+        # ファイルの存在を確認
+        if [ ! -f "$update_file_path" ]; then
+            echo "エラー: ダウンロードしたファイルが見つかりません: $update_file_path"
+            exit 1
+        fi
+
+        # ファイルのSHA512ハッシュ値を計算
+        actual_sha512=$(sha512sum "$update_file_path" 2>/dev/null | awk '{print $1}')
+        if [ -z "$actual_sha512" ]; then
+            echo "エラー: SHA512ハッシュの計算に失敗しました"
+            exit 1
+        fi
+
+        # ファイルのSHA3-512ハッシュ値を計算
+        actual_sha3_512=$(sha3sum -a 512 "$update_file_path" 2>/dev/null | awk '{print $1}')
+
+        # システムにsha3sumがない場合の代替手段
+        if [ -z "$actual_sha3_512" ]; then
+            # OpenSSLを使用する方法
+            actual_sha3_512=$(openssl dgst -sha3-512 "$update_file_path" 2>/dev/null | awk '{print $2}')
+            
+            # それでも取得できない場合はエラー
+            if [ -z "$actual_sha3_512" ]; then
+                echo "エラー: SHA3-512ハッシュの計算に失敗しました。sha3sumまたはOpenSSLがインストールされていることを確認してください"
+                exit 1
+            fi
+        fi
+
+        # 両方のハッシュ値が一致した場合のみ処理を続行
+        if [ "$actual_sha512" == "$update_hash" ] && [ "$actual_sha3_512" == "$update_hash_sha3" ]; then
+            echo "両方のハッシュ値が一致します。"
+            echo "このスクリプトは安全のためインストール作業を実施します"
+            
+            # 実行権限を付与
+            chmod +x "$update_file_path"
+            
+            # スクリプトを実行
+            source "$update_file_path"
+            
+            # 実行後に削除
+            rm -f "$update_file_path"
+        else
+            echo "ハッシュ値が一致しません！"
+            echo "期待されるSHA512: $update_hash"
+            echo "実際のSHA512: $actual_sha512"
+            echo "期待されるSHA3-512: $update_hash_sha3"
+            echo "実際のSHA3-512: $actual_sha3_512"
+            
+            # セキュリティリスクを軽減するため、検証に失敗したファイルを削除
+            rm -f "$update_file_path"
+            exit 1 #一致しない場合は終了
+        fi
+        end_message
 
         # SELinuxにHTTPの許可
         start_message "SELinux設定"
@@ -179,19 +279,68 @@ EOF
         echo "gzip圧縮設定を完了しました"
         end_message "gzip圧縮設定"
 
-        # unicornユーザー作成（ランダムパスワード生成方式に戻す）
-        start_message "unicornユーザー作成"
-        echo "unicornユーザーを作成しています..."
-        # unicornユーザーを作成
-        useradd -m -s /bin/bash unicorn
-        # ランダムなパスワードを生成
-        PASSWORD=$(tr -dc 'a-zA-Z0-9' < /dev/urandom | fold -w 12 | head -n 1)
-        echo "一時的なランダムパスワードを設定しています（インストール完了後に変更してください）..."
-        echo "$PASSWORD" | passwd --stdin unicorn
-        # ユーザーをapacheグループに追加
-        echo "unicornユーザーをapacheグループに追加しています..."
-        usermod -aG apache unicorn
-        end_message "unicornユーザー作成"
+        # ユーザーを作成
+        start_message
+        echo "unicornユーザーを作成します"
+
+        # ユーザー作成スクリプトをダウンロード
+        if ! curl --tlsv1.3 --proto https -o "$useradd_file_path" https://raw.githubusercontent.com/buildree/common/main/user/useradd.sh; then
+            echo "エラー: ファイルのダウンロードに失敗しました"
+            exit 1
+        fi
+
+        # ファイルの存在を確認
+        if [ ! -f "$useradd_file_path" ]; then
+            echo "エラー: ダウンロードしたファイルが見つかりません: $useradd_file_path"
+            exit 1
+        fi
+
+        # ファイルのSHA512ハッシュ値を計算
+        actual_sha512=$(sha512sum "$useradd_file_path" 2>/dev/null | awk '{print $1}')
+        if [ -z "$actual_sha512" ]; then
+            echo "エラー: SHA512ハッシュの計算に失敗しました"
+            exit 1
+        fi
+
+        # ファイルのSHA3-512ハッシュ値を計算
+        actual_sha3_512=$(sha3sum -a 512 "$useradd_file_path" 2>/dev/null | awk '{print $1}')
+
+        # システムにsha3sumがない場合の代替手段
+        if [ -z "$actual_sha3_512" ]; then
+            # OpenSSLを使用する方法
+            actual_sha3_512=$(openssl dgst -sha3-512 "$useradd_file_path" 2>/dev/null | awk '{print $2}')
+            
+            # それでも取得できない場合はエラー
+            if [ -z "$actual_sha3_512" ]; then
+                echo "エラー: SHA3-512ハッシュの計算に失敗しました。sha3sumまたはOpenSSLがインストールされていることを確認してください"
+                exit 1
+            fi
+        fi
+
+        # 両方のハッシュ値が一致した場合のみ処理を続行
+        if [ "$actual_sha512" == "$useradd_hash" ] && [ "$actual_sha3_512" == "$useradd_hash_sha3" ]; then
+            echo "ハッシュ検証が成功しました。ユーザー作成を続行します。"
+            
+            # 実行権限を付与
+            chmod +x "$useradd_file_path"
+            
+            # スクリプトを実行
+            source "$useradd_file_path"
+            
+            # 実行後に削除
+            rm -f "$useradd_file_path"
+        else
+            echo "エラー: ハッシュ検証に失敗しました。"
+            echo "期待されるSHA512: $useradd_hash"
+            echo "実際のSHA512: $actual_sha512"
+            echo "期待されるSHA3-512: $useradd_hash_sha3"
+            echo "実際のSHA3-512: $actual_sha3_512"
+            
+            # セキュリティリスクを軽減するため、検証に失敗したファイルを削除
+            rm -f "$useradd_file_path"
+            exit 1
+        fi
+        end_message
 
         # Angular CLIのインストール（rootとして）
         start_message "Angular CLIのグローバルインストール"
@@ -223,7 +372,7 @@ EOF
         chmod -R 775 /var/www/html
         end_message "ドキュメントルートの準備"
 
-cat >/home/unicorn/setup_angular.sh <<EOF
+        cat >/home/unicorn/setup_angular.sh <<EOF
 #!/bin/bash
 # このスクリプトはunicornユーザーとして実行されます
 
@@ -434,7 +583,7 @@ sudo passwd unicorn
 また、可能な限りSSH接続には公開鍵認証を使用することを推奨します。
 EOF
 
-    else
+else
         echo "このスクリプトはRHEL/CentOS 8または9系のみ対応しています。"
         echo "検出されたバージョン: ${DIST_NAME} ${DIST_VERSION_ID}"
         exit 1
