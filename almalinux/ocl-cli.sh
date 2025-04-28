@@ -39,7 +39,7 @@ if [ "$choice" = "y" ]; then
   }
 
   hash_file="/tmp/hashes.txt"
-  expected_sha3_512="bddc1c5783ce4f81578362144f2b145f7261f421a405ed833d04b0774a5f90e6541a0eec5823a96efd9d3b8990f32533290cbeffdd763dc3dd43811c6b45cfbe"
+  expected_sha3_512="e8243148d093f686fb29d2a612a01f9189796f0d9ed07b485da6872709aa7f2449e9d866fbb8026a19f118e44c5a14a3546c15de4fc7cb4de001af607a09cb3f"
 
   # リポジトリのシェルファイルの格納場所
   update_file_path="/tmp/update.sh"
