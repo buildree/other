@@ -73,8 +73,8 @@ if [ "$choice" = "y" ]; then
 
   echo "検出されたディストリビューション: $DIST_NAME $DIST_VERSION_ID"
 
-  # Redhat系で8または9の場合のみ処理を実行
-  if [ -e /etc/redhat-release ] && [[ "$DIST_MAJOR_VERSION" -eq 8 || "$DIST_MAJOR_VERSION" -eq 9 ]]; then
+  # Redhat系で8、9または10の場合のみ処理を実行
+  if [ -e /etc/redhat-release ] && [[ "$DIST_MAJOR_VERSION" -eq 8 || "$DIST_MAJOR_VERSION" -eq 9 || "$DIST_MAJOR_VERSION" -eq 10 ]]; then
 
     # ハッシュファイルのダウンロード
     start_message

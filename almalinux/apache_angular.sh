@@ -2,7 +2,7 @@
 
 # Buildree Apache + Angularインストールスクリプト
 # 目的：Apache 2.4系のインストール、Node.js 20のインストール、Angular CLIのインストール、SSL設定の構成、gzip圧縮の有効化、htaccess許可設定、unicornユーザーの自動作成
-# 対象：AlmaLinux、Rocky Linux、RHEL、CentOS Stream、Oracle Linux (8/9系)
+# 対象：AlmaLinux、Rocky Linux、RHEL、CentOS Stream、Oracle Linux (8/9/10系)
 
 # 起動メッセージと確認
 cat <<EOF
@@ -85,9 +85,9 @@ if [ "$(id -u)" != "0" ]; then
     exit 1
 fi
 
-# RHEL系8/9のみ処理
+# RHEL系8/9/10のみ処理
 if [ -e /etc/redhat-release ]; then
-    if [ "$DIST_MAJOR_VERSION" = "8" ] || [ "$DIST_MAJOR_VERSION" = "9" ]; then
+    if [ "$DIST_MAJOR_VERSION" = "8" ] || [ "$DIST_MAJOR_VERSION" = "9" ] || [ "$DIST_MAJOR_VERSION" = "10" ]; then
         # システム関連のインストールと設定を実行するスクリプト部分
         
         # ハッシュファイルのダウンロード
@@ -207,19 +207,25 @@ if [ -e /etc/redhat-release ]; then
         end_message "SELinux設定"
 
         # Node.jsのインストール
+        # EL10のAppStreamにはnodejs:20ストリームが無いため、EL10のみnodejs:22を使用
+        if [ "$DIST_MAJOR_VERSION" = "10" ]; then
+            NODEJS_STREAM="22"
+        else
+            NODEJS_STREAM="20"
+        fi
         start_message "Node.jsインストール"
         echo "インストール可能なNode.jsモジュールを確認しています..."
         dnf module list nodejs
-        echo "Node.js 20モジュールを有効化しています..."
-        
-        # Node.js 20の有効化とインストール
-        if ! dnf module -y enable nodejs:20; then
+        echo "Node.js ${NODEJS_STREAM}モジュールを有効化しています..."
+
+        # Node.jsの有効化とインストール
+        if ! dnf module -y enable nodejs:${NODEJS_STREAM}; then
             echo "Node.jsモジュールの有効化に失敗しました"
             exit 1
         fi
-        
-        echo "Node.js 20をインストールしています..."
-        if ! dnf module install -y nodejs:20; then
+
+        echo "Node.js ${NODEJS_STREAM}をインストールしています..."
+        if ! dnf module install -y nodejs:${NODEJS_STREAM}; then
             echo "Node.jsのインストールに失敗しました"
             exit 1
         fi
@@ -584,13 +590,13 @@ sudo passwd unicorn
 EOF
 
 else
-        echo "このスクリプトはRHEL/CentOS 8または9系のみ対応しています。"
+        echo "このスクリプトはRHEL/CentOS 8、9または10系のみ対応しています。"
         echo "検出されたバージョン: ${DIST_NAME} ${DIST_VERSION_ID}"
         exit 1
     fi
 else
     echo "このスクリプトはRHEL系のみ対応しています。"
-    echo "対応ディストリビューション: AlmaLinux、Rocky Linux、RHEL、CentOS Stream、Oracle Linux (8/9系)"
+    echo "対応ディストリビューション: AlmaLinux、Rocky Linux、RHEL、CentOS Stream、Oracle Linux (8/9/10系)"
     exit 1
 fi
 
