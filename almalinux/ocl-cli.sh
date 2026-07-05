@@ -26,16 +26,25 @@ read -r choice
 if [ "$choice" = "y" ]; then
   # スクリプトの実行
 
+  EXECUTED_STEPS=""
+  WARNINGS=""
+
   start_message(){
     echo ""
-    echo "======================開始======================"
+    echo "======================開始: $1 ======================"
     echo ""
+    EXECUTED_STEPS="${EXECUTED_STEPS}- $1"$'\n'
   }
 
   end_message(){
     echo ""
-    echo "======================完了======================"
+    echo "======================完了: $1 ======================"
     echo ""
+  }
+
+  warn_message(){
+    echo "警告: $1"
+    WARNINGS="${WARNINGS}- $1"$'\n'
   }
 
   # ディストリビューションとバージョンの検出
@@ -59,7 +68,7 @@ if [ "$choice" = "y" ]; then
       DIST_NAME=$(cat /etc/redhat-release)
     fi
   else
-    echo "サポートされていないディストリビューションです"
+    warn_message "サポートされていないディストリビューションです"
     exit 1
   fi
 
@@ -72,7 +81,7 @@ if [ "$choice" = "y" ]; then
     sudo dnf -y install git
 
     # ユーザーを作成
-    start_message
+    start_message "unicornユーザーの作成"
     echo "unicornユーザーを作成します"
 
     USERNAME='unicorn'
@@ -96,21 +105,21 @@ if [ "$choice" = "y" ]; then
     cp /home/${USERNAME}/.ssh/${USERNAME} /home/${USERNAME}/
     chown ${USERNAME}:${USERNAME} /home/${USERNAME}/${USERNAME}
     rm /home/${USERNAME}/.ssh/${USERNAME}
-    end_message
+    end_message "unicornユーザーの作成"
 
     # 必要な物をインストール
-    start_message
+    start_message "開発ツール・依存パッケージのインストール"
     dnf groupinstall -y "Development Tools"
     dnf install -y gcc wget openssl-devel bzip2-devel libffi-devel
-    end_message
+    end_message "開発ツール・依存パッケージのインストール"
 
     # システムアップデート
-    start_message
+    start_message "システムアップデート"
     echo "システムを最新版に更新します"
     dnf -y update
-    end_message
+    end_message "システムアップデート"
 
-    start_message
+    start_message "Python 3.12のインストール"
     echo "pythonのインストールをします"
     dnf install -y python3.12 python3.12-devel python3.12-pip
     echo "起動時に読み込まれるようにします"
@@ -125,9 +134,9 @@ EOF
     source /etc/profile.d/python.sh
     sudo ln -sf /usr/bin/python3 /usr/bin/python
     sudo ln -s /usr/bin/pip3.12 /usr/bin/pip
-    end_message
+    end_message "Python 3.12のインストール"
 
-    start_message
+    start_message "pipのアップグレード"
     echo "pipのアップグレードをします"
     # システム全体のpipをアップグレード
     python3.12 -m pip install --upgrade pip
@@ -141,9 +150,9 @@ EOF
     which pip
     echo "pipのバージョン:"
     pip --version
-    end_message
+    end_message "pipのアップグレード"
 
-    start_message
+    start_message "OCI CLIのインストール"
     echo "OCI CLIのインストール処理を開始します"
 
     # 仮想環境用のスクリプトを作成
@@ -226,33 +235,55 @@ EOF
     rm -f /tmp/install_oci_cli.sh
 
     # ユーザーの切り替え
-    end_message
+    end_message "OCI CLIのインストール"
 
-    # 終わりのメッセージをここに残す
-    echo "ed25519 SSH鍵が生成されました。"
-    echo "秘密鍵: /home/${USERNAME}/${USERNAME}"
-    echo "公開鍵: /home/${USERNAME}/.ssh/${USERNAME}.pub"
-    echo ""
-    echo "秘密鍵が /home/${USERNAME}/${USERNAME} に移動されました。"
-    echo "秘密鍵のパーミッションは 600 に設定されています。"
-    echo "このファイルを安全な方法でクライアントマシンに移動し、サーバーからは削除することを強く推奨します。"
-    echo "秘密鍵はサーバー上に保管せず、使用するクライアントマシンにのみ保管してください。"
-    echo "公開鍵をクライアントマシンの ~/.ssh/authorized_keys ファイルに追加してください。"
-    echo "必要に応じて、秘密鍵にパスフレーズを設定してください。"
-    echo "ユーザーのパスワードはランダムで生成されています。セキュリティの関係上表示したりファイルに残していないので新しく設定してください。"
+    # 完了サマリーの作成・表示・保存
+    build_summary() {
+      cat <<SUMMARYEOF
+Buildree インストールサマリー - $(date '+%Y-%m-%d %H:%M:%S')
 
-    # OCI CLI使用方法の説明を追加
+======================実行内容サマリー======================
+${EXECUTED_STEPS}
+======================作成・変更したファイル======================
+- /home/unicorn 以下のユーザーホームディレクトリ一式
+- /home/unicorn/.ssh/unicorn.pub (SSH公開鍵)
+- /home/unicorn/.ssh/authorized_keys
+- /home/unicorn/unicorn (SSH秘密鍵)
+- /etc/profile.d/python.sh (PATHにpython/pipを追加)
+- /home/unicorn/oracle-cli (OCI CLI用Python仮想環境)
+- /home/unicorn/.bashrc (oci-activateエイリアスを追記)
+
+======================unicornユーザーの認証情報======================
+- ログイン方式: SSH鍵認証(ed25519)
+- 秘密鍵: /home/unicorn/unicorn (パーミッション600)
+- 公開鍵: /home/unicorn/.ssh/unicorn.pub
+- OSログインパスワードはランダム生成後、画面表示・ファイル保存はしていません(セキュリティのため)。必要な場合は passwd unicorn で再設定してください。
+
+======================警告======================
+$( [ -n "$WARNINGS" ] && printf '%s' "$WARNINGS" || echo "警告はありませんでした" )
+
+======================アクセス方法・注意事項======================
+OCI CLIの使用方法：
+1. unicornユーザーでログイン: su - unicorn
+2. 仮想環境を有効化: oci-activate または source oracle-cli/bin/activate
+3. 仮想環境を無効化: deactivate
+4. OCI CLIを使用: oci <コマンド>
+例 oci --version にてバージョン表示
+SUMMARYEOF
+    }
+
+    SUMMARY_TEXT=$(build_summary)
+    echo "$SUMMARY_TEXT"
+    echo "$SUMMARY_TEXT" > /home/unicorn/buildree_install_summary.txt
+    chown unicorn:unicorn /home/unicorn/buildree_install_summary.txt
+    chmod 600 /home/unicorn/buildree_install_summary.txt
     echo ""
-    echo "OCI CLIの使用方法："
-    echo "1. unicornユーザーでログイン: su - unicorn"
-    echo "2. 仮想環境を有効化: oci-activate または source oracle-cli/bin/activate"
-    echo "3. 仮想環境を無効化: deactivate"
-    echo "4. OCI CLIを使用: oci <コマンド>"
-    echo "例 oci --version にてバージョン表示"
+    echo "このサマリーは /home/unicorn/buildree_install_summary.txt に保存されました。"
+
     sudo su -l unicorn
 
   else
-    echo "対象OSではないため、このスクリプトは使えません。"
+    warn_message "対象OSではないため、このスクリプトは使えません。"
   fi
 elif [ "$choice" = "n" ]; then
   # スクリプトの実行を中止
